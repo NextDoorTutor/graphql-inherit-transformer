@@ -70,8 +70,6 @@ export class InheritTransformer extends TransformerPluginBase {
 			);
 		}
 
-		console.log(inheritFrom);
-
 		interface IDefinitions {
 			[key: string]: ObjectTypeDefinitionNode;
 		}
@@ -138,7 +136,5 @@ export class InheritTransformer extends TransformerPluginBase {
 			kind: "Document",
 			definitions: documentDefinitions
 		} as DocumentNode;
-
-		console.log(JSON.stringify(acc.inputDocument));
 	};
 }
