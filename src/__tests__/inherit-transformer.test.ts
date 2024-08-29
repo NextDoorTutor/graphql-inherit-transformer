@@ -17,7 +17,10 @@ test("@inherit directive can be used on types", () => {
 	const transformer = new GraphQLTransform({
 		transformers: [new ModelTransformer(), new InheritTransformer()],
 	});
-	expect(() => transformer.transform(schema)).not.toThrow();
+	expect(() => {
+		const test = transformer.transform(schema);
+		console.log(test);
+	}).not.toThrow();
 });
 
 test("cannot inherit from undefined type", () => {

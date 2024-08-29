@@ -113,8 +113,8 @@ export class InheritTransformer extends TransformerPluginBase {
 			...definition,
 			fields: updatedDefinitionFields
 		};
-		console.log(JSON.stringify(definition));
-		console.log(JSON.stringify(updatedDefinition));
+		// console.log(JSON.stringify(definition));
+		// console.log(JSON.stringify(updatedDefinition));
 
 		//Generate the new document definitions
 		const documentDefinitions = [];
@@ -132,9 +132,11 @@ export class InheritTransformer extends TransformerPluginBase {
 			}
 		}
 
-		acc.inputDocument = {
-			kind: "Document",
-			definitions: documentDefinitions
-		} as DocumentNode;
+		acc.output.updateObject(updatedDefinition);
+
+		// acc.inputDocument = {
+		// 	kind: "Document",
+		// 	definitions: documentDefinitions
+		// } as DocumentNode;
 	};
 }
