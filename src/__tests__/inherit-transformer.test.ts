@@ -3,144 +3,99 @@ import { ModelTransformer } from "@aws-amplify/graphql-model-transformer";
 import { ModelResourceIDs } from "graphql-transformer-common";
 import InheritTransformer from "../index";
 
-test("@ttl directive can be used on fields", () => {
-  const schema = `
-    type ExpiringChatMessage @model {
-      id: ID!
-      message: String
-      expirationUnixTime: AWSTimestamp! @ttl
-    }
-  `;
-  const transformer = new GraphQLTransform({
-    transformers: [new ModelTransformer(), new InheritTransformer()],
-  });
-  expect(() => transformer.transform(schema)).not.toThrow();
+test("@inherit directive can be used on types", () => {
+	const schema = `
+		type Model {
+			id: ID!
+			createdAt: AWSDateTime!
+		}
+
+		type UserModel @inherit(from: ["Model"]) {
+			name: String!
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => transformer.transform(schema)).not.toThrow();
 });
 
-test("@ttl directive can not be used on types", () => {
-  const schema = `
-    type ExpiringChatMessage @model @ttl {
-      id: ID!
-      message: String
-      expirationUnixTime: AWSTimestamp!
-    }
-  `;
-  const transformer = new GraphQLTransform({
-    transformers: [new ModelTransformer(), new InheritTransformer()],
-  });
-  expect(() => transformer.transform(schema)).toThrowError(
-    'Directive "@ttl" may not be used on OBJECT.'
-  );
+test("cannot inherit from undefined type", () => {
+	const schema = `
+		type UserModel @inherit(from: ["Model"]) {
+			name: String!
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => transformer.transform(schema)).toThrowError();
 });
 
-test("@ttl directive can not be used on fields other than Int and AWSTimestamp", () => {
-  const schema = `
-    type ExpiringChatMessage @model {
-      id: ID!
-      message: String
-      expirationUnixTime: String! @ttl
-    }
-  `;
-  const transformer = new GraphQLTransform({
-    transformers: [new ModelTransformer(), new InheritTransformer()],
-  });
-  expect(() => transformer.transform(schema)).toThrowError(
-    'Directive "@ttl" must be used only on AWSTimestamp or Int type fields.'
-  );
+test("must define argument for directive @inherit", () => {
+	const schema = `
+		type Model {
+			id: ID!
+			createdAt: AWSDateTime!
+		}
+
+		type UserModel @inherit {
+			name: String!
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => transformer.transform(schema)).toThrowError();
 });
 
-test("@ttl directive can be used on fields with AWSTimestamp type", () => {
-  const schema = `
-    type ExpiringChatMessage @model {
-      id: ID!
-      message: String
-      expirationUnixTime: AWSTimestamp! @ttl
-    }
-  `;
-  const transformer = new GraphQLTransform({
-    transformers: [new ModelTransformer(), new InheritTransformer()],
-  });
-  expect(() => transformer.transform(schema)).not.toThrow();
+test("must define from for directive @inherit", () => {
+	const schema = `
+		type Model {
+			id: ID!
+			createdAt: AWSDateTime!
+		}
+
+		type UserModel @inherit(badArgument: ["Model"]) {
+			name: String!
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => transformer.transform(schema)).toThrowError();
 });
 
-test("@ttl directive can be used on fields with Int type", () => {
-  const schema = `
-    type ExpiringChatMessage @model {
-      id: ID!
-      message: String
-      expirationUnixTime: Int! @ttl
-    }
-  `;
-  const transformer = new GraphQLTransform({
-    transformers: [new ModelTransformer(), new InheritTransformer()],
-  });
-  expect(() => transformer.transform(schema)).not.toThrow();
+test("must define string or array of strings for from argument of directive @inherit", () => {
+	const schema = `
+		type Model {
+			id: ID!
+			createdAt: AWSDateTime!
+		}
+
+		type UserModel @inherit(badArgument: [3]) {
+			name: String!
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => transformer.transform(schema)).toThrowError();
 });
 
-test("Only one @ttl directive per type is allowed", () => {
-  const schema = `
-      type ExpiringChatMessage @model {
-        id: ID!
-        message: String
-        expirationUnixTime: AWSTimestamp! @ttl
-        anotherExpirationUnixTime: AWSTimestamp! @ttl
-      }
-    `;
-  const transformer = new GraphQLTransform({
-    transformers: [new ModelTransformer(), new InheritTransformer()],
-  });
-  expect(() => transformer.transform(schema)).toThrowError(
-    'Directive "@ttl" must be used only once in the same type.'
-  );
-});
+test("must define string or array of strings for from argument of directive @inherit", () => {
+	const schema = `
+		type Model {
+			id: ID!
+			createdAt: AWSDateTime!
+		}
 
-const getPropertiesOfSchemaTable = (schema: string, schemaTypeName: string) => {
-  const tableName = ModelResourceIDs.ModelTableResourceID(schemaTypeName);
-  const transformer = new GraphQLTransform({
-    transformers: [new ModelTransformer(), new InheritTransformer()],
-  });
-  const resources =
-    transformer.transform(schema).stacks[schemaTypeName].Resources;
-  if (!resources) {
-    throw new Error("Expected to have resources in the stack");
-  }
-  const table = resources[tableName];
-  if (!table) {
-    throw new Error(
-      `Expected to have a table resource called ${tableName} in the stack`
-    );
-  }
-  const properties = table.Properties;
-  if (!properties) {
-    throw new Error(`Expected to have a properties in table ${tableName}`);
-  }
-  return properties;
-};
-
-test("Generated CloudFormation document contains the TimeToLiveSpecification property", () => {
-  const schema = `
-    type ExpiringChatMessage @model {
-      id: ID!
-      message: String
-      expirationUnixTime: AWSTimestamp! @ttl
-    }
-  `;
-  const properties = getPropertiesOfSchemaTable(schema, "ExpiringChatMessage");
-  const timeToLiveSpecificationProperty = properties["TimeToLiveSpecification"];
-  expect(timeToLiveSpecificationProperty).toBeDefined();
-});
-
-test("TimeToLiveSpecification property is pointing to the field where the @ttl directive was used", () => {
-  const schema = `
-    type ExpiringChatMessage @model {
-      id: ID!
-      message: String
-      expirationUnixTime: AWSTimestamp! @ttl
-    }
-  `;
-  const properties = getPropertiesOfSchemaTable(schema, "ExpiringChatMessage");
-  const timeToLiveSpecificationProperty = properties["TimeToLiveSpecification"];
-  expect(timeToLiveSpecificationProperty.AttributeName).toEqual(
-    "expirationUnixTime"
-  );
+		type UserModel @inherit(badArgument: 3) {
+			name: String!
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => transformer.transform(schema)).toThrowError();
 });

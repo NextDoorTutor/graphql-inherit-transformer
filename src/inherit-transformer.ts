@@ -15,7 +15,7 @@ import {
 
 export class InheritTransformer extends TransformerPluginBase {
 	constructor() {
-		super("InheritTransformer", "directive @inherit(from: [String!]) on ObjectTypeDefinitionNode, InterfaceTypeDefinitionNode and InputObjectTypeDefinitionNode");
+		super("InheritTransformer", "directive @inherit(from: [String]!) on OBJECT | INTERFACE");
 	}
 
 	public object = (
@@ -70,6 +70,8 @@ export class InheritTransformer extends TransformerPluginBase {
 			);
 		}
 
+		console.log(inheritFrom);
+
 		interface IDefinitions {
 			[key: string]: ObjectTypeDefinitionNode;
 		}
@@ -113,6 +115,8 @@ export class InheritTransformer extends TransformerPluginBase {
 			...definition,
 			fields: updatedDefinitionFields
 		};
+		console.log(JSON.stringify(definition));
+		console.log(JSON.stringify(updatedDefinition));
 
 		//Generate the new document definitions
 		const documentDefinitions = [];
@@ -134,5 +138,7 @@ export class InheritTransformer extends TransformerPluginBase {
 			kind: "Document",
 			definitions: documentDefinitions
 		} as DocumentNode;
+
+		console.log(JSON.stringify(acc.inputDocument));
 	};
 }
