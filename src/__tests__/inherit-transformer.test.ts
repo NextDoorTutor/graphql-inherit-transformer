@@ -43,6 +43,30 @@ test("@inherit directive can be used on types and have a string for inherit type
 	}).not.toThrow();
 });
 
+test("Can inherit from a type that is also inheriting", () => {
+	const schema = `
+		type Model {
+			id: ID!
+			createdAt: AWSDateTime!
+		}
+
+		type UserModel @inherit(from: "Model") {
+			name: String!
+		}
+
+		type CustomerModel @inherit(from: "UserModel") {
+			balance: Float!
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => {
+		const test = transformer.transform(schema);
+		//console.log(test);
+	}).not.toThrow();
+});
+
 // test("@inherit directive can be used on types and inherit from a union", () => {
 // 	const schema = `
 // 		type Model1 {
