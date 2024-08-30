@@ -1,8 +1,9 @@
 # graphql-inherit-transformer
 
-<!-- [![Pull requests are welcome!](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contribute-) -->
-<!-- [![npm](https://img.shields.io/npm/v/graphql-ttl-transformer)](https://www.npmjs.com/package/graphql-ttl-transformer) -->
-<!-- [![GitHub license](https://img.shields.io/github/license/flogy/graphql-ttl-transformer)](https://github.com/flogy/graphql-ttl-transformer/blob/main/LICENSE) -->
+This is a custom GraphQL transformer for using with AWS AppSync and Amplify. It allows you to add inheritance to types such that a type can inherit all attributes from a parent type without the need for repetition
+[![Pull requests are welcome!](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contribute-)
+[![npm](https://img.shields.io/npm/v/graphql-inherit-transformer)](https://www.npmjs.com/package/graphql-inherit-transformer)
+[![GitHub license](https://img.shields.io/github/license/NextDoorTutor/graphql-inherit-transformer)](https://github.com/NextDoorTutor/graphql-inherit-transformer/blob/main/LICENSE)
 
 ## Installation
 
@@ -30,7 +31,7 @@ type Model {
 	createdAt: AWSTimestamp!
 }
 
-type UserModel @model {
+type UserModel @inherit(from: ["Model"]) {
 	name: String!
 }
 ```
@@ -43,7 +44,7 @@ type Model {
 	createdAt: AWSTimestamp!
 }
 
-type UserModel @model {
+type UserModel {
 	name: String!
 	id: ID!
 	createdAt: AWSTimestamp!
