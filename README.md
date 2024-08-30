@@ -1,6 +1,7 @@
+This is a custom GraphQL transformer for using with AWS AppSync and Amplify. It allows you to add inheritance to types such that a type can inherit all attributes from a parent type without the need for repetition
+
 # graphql-inherit-transformer
 
-This is a custom GraphQL transformer for using with AWS AppSync and Amplify. It allows you to add inheritance to types such that a type can inherit all attributes from a parent type without the need for repetition
 [![Pull requests are welcome!](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contribute-)
 [![npm](https://img.shields.io/npm/v/graphql-inherit-transformer)](https://www.npmjs.com/package/graphql-inherit-transformer)
 [![GitHub license](https://img.shields.io/github/license/NextDoorTutor/graphql-inherit-transformer)](https://github.com/NextDoorTutor/graphql-inherit-transformer/blob/main/LICENSE)
