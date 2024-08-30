@@ -113,30 +113,7 @@ export class InheritTransformer extends TransformerPluginBase {
 			...definition,
 			fields: updatedDefinitionFields
 		};
-		// console.log(JSON.stringify(definition));
-		// console.log(JSON.stringify(updatedDefinition));
-
-		//Generate the new document definitions
-		const documentDefinitions = [];
-		for (const definition of acc.inputDocument.definitions) {
-			if (isTypeDefinitionNode(definition)) {
-				if (definition.name.value === objectName) {
-					documentDefinitions.push(updatedDefinition);
-				}
-				else {
-					documentDefinitions.push(definition);
-				}
-			}
-			else {
-				documentDefinitions.push(definition);
-			}
-		}
 
 		acc.output.updateObject(updatedDefinition);
-
-		// acc.inputDocument = {
-		// 	kind: "Document",
-		// 	definitions: documentDefinitions
-		// } as DocumentNode;
 	};
 }

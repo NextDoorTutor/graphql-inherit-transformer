@@ -1,6 +1,6 @@
 {
   "name": "graphql-inherit-transformer",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Add inheritance to GraphQL schema such that you can define types that inherit from other types (meaning they gain all their attributes and relationships).",
   "license": "MIT",
   "scripts": {
