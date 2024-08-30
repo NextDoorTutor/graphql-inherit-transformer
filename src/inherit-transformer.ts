@@ -21,7 +21,7 @@ import {
 
 export class InheritTransformer extends TransformerPluginBase {
 	constructor() {
-		super("InheritTransformer", "directive @inherit(from: [String]!) on OBJECT");
+		super("InheritTransformer", "directive @inherit(from: [String!]!, removeNonNull: [String]) on OBJECT");
 	}
 
 	public object = function (definition: ObjectTypeDefinitionNode, directive: DirectiveNode, acc: TransformerSchemaVisitStepContextProvider) {
@@ -39,36 +39,55 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 	}
 
 	//Returns an array of type names that the given directive inherits from
-	const getInheritedTypeNames = function (directive: DirectiveNode, parentName: string): string[] {
+	interface IInheritDirectiveDetails {
+		inheritFrom: string[]
+		removeNonNull: string[]
+	};
+
+	const getInheritDirectiveDetails = function (directive: DirectiveNode, parentName: string):IInheritDirectiveDetails {
 		const directiveName = directive.name.value;
 		if (directiveName !== 'inherit') {
-			return [];
+			return {
+				inheritFrom: [],
+				removeNonNull: []
+			};
 		}
 		const directiveArguments = directive.arguments;
 		const inheritFrom:string[] = [];
+		const removeNonNull:string[] = [];
 		if (Array.isArray(directiveArguments) && directiveArguments.length > 0) {
 			for (const directiveArgument of directiveArguments) {
 				const argumentName = directiveArgument.name.value;
 				const argumentValue = directiveArgument.value;
 				const argumentValueKind = argumentValue.kind;
-				if (argumentName === "from") {
+				if (argumentName === "from" || argumentName === "removeNonNull") {
 					if (argumentValueKind === "ListValue") {
 						const values = argumentValue.values;
 						for (const value of values) {
 							if (value.kind !== "StringValue") {
 								throw new InvalidDirectiveError(
-									"Directive " + directiveName + " on " + parentName + " has an invalid type for from value(s): " + value.kind
+									"Directive " + directiveName + " on " + parentName + " has an invalid type for " + argumentName + " value(s): " + value.kind
 								);
 							}
-							inheritFrom.push(value.value);
+							if (argumentName === "from") {
+								inheritFrom.push(value.value);
+							}
+							else {
+								removeNonNull.push(value.value);
+							}
 						}
 					} 
 					else if (argumentValueKind === "StringValue") {
-						inheritFrom.push(argumentValue.value);
+						if (argumentName === "from") {
+							inheritFrom.push(argumentValue.value);
+						}
+						else {
+							removeNonNull.push(argumentValue.value);
+						}
 					}
 					else {
 						throw new InvalidDirectiveError(
-							"Directive " + directiveName + " on " + parentName + " has an invalid type for from value(s): " + argumentValueKind
+							"Directive " + directiveName + " on " + parentName + " has an invalid type for " + argumentName + " value(s): " + argumentValueKind
 						);
 					}
 				}
@@ -84,7 +103,10 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 				"Directive '@inherit' on " + parentName + " must specify a 'from' argument"
 			);
 		}
-		return inheritFrom;
+		return {
+			inheritFrom: inheritFrom,
+			removeNonNull: removeNonNull
+		};
 	};
 
 	//Build a map of the fields in the current type including inherited fields
@@ -99,12 +121,14 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 	}
 
 	//Get the names of the types to inherit from
-	const inheritedTypeNames = getInheritedTypeNames(directive, objectName);
+	const inheritDirectiveDetails = getInheritDirectiveDetails(directive, objectName);
+	const inheritedTypeNames = inheritDirectiveDetails.inheritFrom || [];
+	const removeNonNull = inheritDirectiveDetails.removeNonNull || [];
 	logging && console.log("Directly inherited types:");
 	logging && console.log(inheritedTypeNames);
 
 	//Get the fields from the inherited types
-	const getTransformedDefinitionFields = function (definitionName:string) {
+	const getTransformedDefinitionFields = function (definitionName:string, removeNonNullable:boolean = false) {
 		const givenDefinition = acc.output.getObject(definitionName);
 		if (!givenDefinition) {
 			throw new InvalidDirectiveError(
@@ -112,20 +136,39 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 			);
 		}
 		const definitionFields = [...givenDefinition.fields || []];
-		for (const definitionField of definitionFields) {
+		for (let definitionField of definitionFields) {
+			if (removeNonNullable) {
+				const fieldType = definitionField.type;
+				if (fieldType.kind === "NonNullType") {
+					definitionField = {
+						...definitionField,
+						type: fieldType.type
+					}
+				}
+			}
 			transformedDefinitionFields[definitionField.name.value] = definitionField;
 		}
 		const definitionDirectives = givenDefinition.directives || [];
 		for (const definitionDirective of definitionDirectives) {
-			const inheritedTypeNames = getInheritedTypeNames(definitionDirective, definitionName);
+			const inheritDirectiveDetails = getInheritDirectiveDetails(definitionDirective, definitionName);
+			const inheritedTypeNames = inheritDirectiveDetails.inheritFrom || [];
+			const removeNonNull = inheritDirectiveDetails.removeNonNull || [];
 			for (const inheritedTypeName of inheritedTypeNames) {
-				getTransformedDefinitionFields(inheritedTypeName);
+				let removeNonNullable = false;
+				if (removeNonNull.includes(inheritedTypeName)) {
+					removeNonNullable = true;
+				}
+				getTransformedDefinitionFields(inheritedTypeName, removeNonNullable);
 			}
 		}
 	};
 
 	for (const inheritedTypeName of inheritedTypeNames) {
-		getTransformedDefinitionFields(inheritedTypeName);
+		let removeNonNullable = false;
+		if (removeNonNull.includes(inheritedTypeName)) {
+			removeNonNullable = true;
+		}
+		getTransformedDefinitionFields(inheritedTypeName, removeNonNullable);
 	}
 
 	const updatedDefinitionFields = [];

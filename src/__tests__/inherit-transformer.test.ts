@@ -67,6 +67,26 @@ test("Can inherit from a type that is also inheriting", () => {
 	}).not.toThrow();
 });
 
+test("removeNonNull parameter works", () => {
+	const schema = `
+		type Model {
+			id: ID!
+			createdAt: AWSDateTime!
+		}
+
+		type UserModel @inherit(from: "Model", removeNonNull: "Model") {
+			name: String!
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => {
+		const test = transformer.transform(schema);
+		console.log(test);
+	}).not.toThrow();
+});
+
 // test("@inherit directive can be used on types and inherit from a union", () => {
 // 	const schema = `
 // 		type Model1 {
