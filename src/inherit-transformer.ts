@@ -16,6 +16,7 @@ import {
 	DefinitionNode,
 	FieldDefinitionNode,
 	NamedTypeNode,
+	TypeDefinitionNode,
 } from "graphql";
 
 export class InheritTransformer extends TransformerPluginBase {
@@ -103,26 +104,24 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 		return false;
 	};
 
-	// Create a map of the definitions
-	const definitionsArray = acc.inputDocument.definitions;
-	const definitions:IDefinitions = {};
-	for (const definition of definitionsArray) {
-		if (isValidParentDefinition(definition)) {
-			const definitionName = definition.name.value;
-			definitions[definitionName] = definition;
-		}
-	}
-
 	const updatedDefinitionFields = [...definition.fields || []];
 	const unionDefinitions:UnionTypeDefinitionNode[] = [];
 	// Add the fields from the inherited types to the current type
 	for (const inheritedType of inheritFrom) {
-		const inheritedDefinition = definitions[inheritedType];
-		if (!inheritedDefinition) {
+		// const inheritedDefinition = definitions[inheritedType];
+		const inheritedDefinition = acc.output.getType(inheritedType);
+		if (!acc.output.hasType(inheritedType) || !inheritedDefinition) {
 			throw new InvalidDirectiveError(
 				"Type " + inheritedType + " specified in '@inherit' directive on " + objectName + " does not exist."
 			);
 		}
+
+		if (!isValidParentDefinition(inheritedDefinition)) {
+			throw new InvalidDirectiveError(
+				"Type " + inheritedType + " specified in '@inherit' directive on " + objectName + " is not a valid type."
+			);
+		}
+		
 		if (isUnionTypeDefinitionNode(inheritedDefinition)) {
 			unionDefinitions.push(inheritedDefinition);
 		}
@@ -168,7 +167,7 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 				const unionTypes = unionDefinition.types || [];
 				for (const unionType of unionTypes) {
 					const unionTypeName = unionType.name.value;
-					const unionTypeDefinition = definitions[unionTypeName];
+					const unionTypeDefinition = acc.output.getType(unionTypeName);
 					if (!unionTypeDefinition) {
 						throw new InvalidDirectiveError(
 							"Type " + unionTypeName + " specified in union type " + unionDefinition.name.value + " does not exist."
@@ -210,10 +209,10 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 		}
 		
 		const updatedDefinition = {
-			...definition,
+			// ...definition,
 			name: {
 				...definition.name,
-				value: objectName + "PreTransform"
+				value: objectName
 			}
 		} as ObjectTypeDefinitionNode;
 
@@ -223,14 +222,14 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 		// 	name: definition.name,
 		// 	types: definitionObjectNames
 		// };
-		// acc.output.updateObject(updatedDefinition);
+		acc.output.updateObject(updatedDefinition);
 
 		acc.output.addUnion({
 			kind: "UnionTypeDefinition",
 			description: definition.description,
 			name: {
 				...definition.name,
-				value: objectName + "New"
+				value: objectName
 			},
 			types: definitionObjectNames
 		});

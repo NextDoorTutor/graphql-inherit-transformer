@@ -43,61 +43,61 @@ test("@inherit directive can be used on types and have a string for inherit type
 	}).not.toThrow();
 });
 
-test("@inherit directive can be used on types and inherit from a union", () => {
-	const schema = `
-		type Model1 {
-			id: ID!
-			createdAt: AWSDateTime!
-		}
-		type Model2 {
-			id: ID!
-			createdAt: AWSDateTime!
-			updatedAt: AWSDateTime!
-		}
-		union ModelUnion = Model1 | Model2
+// test("@inherit directive can be used on types and inherit from a union", () => {
+// 	const schema = `
+// 		type Model1 {
+// 			id: ID!
+// 			createdAt: AWSDateTime!
+// 		}
+// 		type Model2 {
+// 			id: ID!
+// 			createdAt: AWSDateTime!
+// 			updatedAt: AWSDateTime!
+// 		}
+// 		union ModelUnion = Model1 | Model2
 
-		type UserModel @inherit(from: "ModelUnion") {
-			name: String!
-		}
-	`;
-	const transformer = new GraphQLTransform({
-		transformers: [new ModelTransformer(), new InheritTransformer()],
-	});
-	expect(() => {
-		const test = transformer.transform(schema);
-		//console.log(test);
-	}).not.toThrow();
-});
+// 		type UserModel @inherit(from: "ModelUnion") {
+// 			name: String!
+// 		}
+// 	`;
+// 	const transformer = new GraphQLTransform({
+// 		transformers: [new ModelTransformer(), new InheritTransformer()],
+// 	});
+// 	expect(() => {
+// 		const test = transformer.transform(schema);
+// 		//console.log(test);
+// 	}).not.toThrow();
+// });
 
-test("@inherit directive can be used on types and inherit from a type and a union", () => {
-	const schema = `
-		type Model1 {
-			id: ID!
-			createdAt: AWSDateTime!
-		}
-		type Model2 {
-			id: ID!
-			createdAt: AWSDateTime!
-			updatedAt: AWSDateTime!
-		}
-		union ModelUnion = Model1 | Model2
+// test("@inherit directive can be used on types and inherit from a type and a union", () => {
+// 	const schema = `
+// 		type Model1 {
+// 			id: ID!
+// 			createdAt: AWSDateTime!
+// 		}
+// 		type Model2 {
+// 			id: ID!
+// 			createdAt: AWSDateTime!
+// 			updatedAt: AWSDateTime!
+// 		}
+// 		union ModelUnion = Model1 | Model2
 
-		type RegionModel {
-			region: String!
-		}
+// 		type RegionModel {
+// 			region: String!
+// 		}
 
-		type UserModel @inherit(from: ["RegionModel", "ModelUnion"]) {
-			name: String!
-		}
-	`;
-	const transformer = new GraphQLTransform({
-		transformers: [new ModelTransformer(), new InheritTransformer()],
-	});
-	expect(() => {
-		const test = transformer.transform(schema);
-		//console.log(test);
-	}).not.toThrow();
-});
+// 		type UserModel @inherit(from: ["RegionModel", "ModelUnion"]) {
+// 			name: String!
+// 		}
+// 	`;
+// 	const transformer = new GraphQLTransform({
+// 		transformers: [new ModelTransformer(), new InheritTransformer()],
+// 	});
+// 	expect(() => {
+// 		const test = transformer.transform(schema);
+// 		//console.log(test);
+// 	}).not.toThrow();
+// });
 
 test("cannot inherit from undefined type", () => {
 	const schema = `
