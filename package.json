@@ -1,0 +1,46 @@
+{
+  "name": "graphql-inherit-transformer",
+  "version": "1.1.2",
+  "description": "Add inheritance to GraphQL schema such that you can define types that inherit from other types (meaning they gain all their attributes and relationships).",
+  "license": "MIT",
+  "scripts": {
+    "start": "tsc -w",
+    "build": "tsc",
+    "test": "jest",
+    "prepublishOnly": "npm run test && npm run build",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\""
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NextDoorTutor/graphql-inherit-transformer.git"
+  },
+  "homepage": "https://github.com/NextDoorTutor/graphql-inherit-transformer#readme",
+  "keywords": [
+    "aws",
+    "amplify",
+    "graphql",
+    "transformer",
+    "appsync"
+  ],
+  "devDependencies": {
+    "@aws-amplify/graphql-model-transformer": "^1.4.0",
+    "@types/jest": "^29.5.1",
+    "jest": "^29.5.0",
+    "prettier": "^2.8.7",
+    "ts-jest": "^29.1.0",
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {
+    "@aws-amplify/amplify-cli-core": "^4.2.7",
+    "@aws-amplify/graphql-transformer-core": "^1.4.0",
+    "graphql": "^15.8.0",
+    "graphql-inherit-transformer": "file:",
+    "graphql-mapping-template": "^4.20.8",
+    "graphql-transformer-common": "^4.24.5",
+    "graphql-ttl-transformer": "file:"
+  }
+}
