@@ -154,11 +154,11 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 			const inheritedTypeNames = inheritDirectiveDetails.inheritFrom || [];
 			const removeNonNull = inheritDirectiveDetails.removeNonNull || [];
 			for (const inheritedTypeName of inheritedTypeNames) {
-				let removeNonNullable = false;
-				if (removeNonNull.includes(inheritedTypeName)) {
-					removeNonNullable = true;
+				let inheritedRemoveNonNull = false || removeNonNullable;
+				if (!inheritedRemoveNonNull && removeNonNull.includes(inheritedTypeName)) {
+					inheritedRemoveNonNull = true;
 				}
-				getTransformedDefinitionFields(inheritedTypeName, removeNonNullable);
+				getTransformedDefinitionFields(inheritedTypeName, inheritedRemoveNonNull);
 			}
 		}
 	};
