@@ -55,6 +55,9 @@ export class InheritTransformer extends TransformerPluginBase {
 				const updatedFieldArguments:InputValueDefinitionNode[] = [];
 				let argumentUpdate = false;
 				for (const fieldArgument of fieldArguments) {
+					const awsScalarTypes = ["AWSDate", "AWSTime", "AWSDateTime", "AWSTimestamp", "AWSEmail", "AWSJSON", "AWSPhone", "AWSURL", "AWSIPAddress"];
+					const scalarTypes = [...awsScalarTypes, "String", "ID", "Int", "Float", "Boolean"];
+					
 					//Get the argument object to check
 					const argumentName = fieldArgument.name.value;
 					let argumentType = fieldArgument.type;
@@ -64,6 +67,10 @@ export class InheritTransformer extends TransformerPluginBase {
 						typeStack.push(argumentType);
 					}
 					const argumentTypeName = argumentType.name.value;
+					if (scalarTypes.includes(argumentTypeName)) {
+						updatedFieldArguments.push(fieldArgument);
+						continue;
+					}
 					const argumentObject = acc.output.getType(argumentTypeName);
 					if (!argumentObject) {
 						throw new InvalidDirectiveError(

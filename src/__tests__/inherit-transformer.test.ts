@@ -332,3 +332,22 @@ test("Input doesn't exist", () => {
 		//console.log(test);
 	}).not.toThrow();
 });
+
+test("Primitive type argument", () => {
+	const schema = `
+		type UserModel {
+			name: String!
+		}
+
+		type Mutation {
+			createUser(name: String!): UserModel
+		}
+	`;
+	const transformer = new GraphQLTransform({
+		transformers: [new ModelTransformer(), new InheritTransformer()],
+	});
+	expect(() => {
+		const test = transformer.transform(schema);
+		//console.log(test);
+	}).not.toThrow();
+});
