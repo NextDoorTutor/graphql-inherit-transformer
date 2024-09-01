@@ -38,7 +38,7 @@ export class InheritTransformer extends TransformerPluginBase {
 	};
 
 	public transformSchema = function (acc: TransformerSchemaVisitStepContextProvider) {
-		const updateObject = function (object:ObjectTypeDefinitionNode, logging = true) {
+		const updateObject = function (object:ObjectTypeDefinitionNode, logging = false) {
 			if (!object) {
 				return;
 			}
@@ -170,8 +170,6 @@ export class InheritTransformer extends TransformerPluginBase {
 		if (subscription) {
 			updateObject(subscription);
 		}
-
-		console.log(JSON.stringify(acc.output));
 	}
 }
 
