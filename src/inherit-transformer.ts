@@ -38,127 +38,136 @@ export class InheritTransformer extends TransformerPluginBase {
 	};
 
 	public transformSchema = function (acc: TransformerSchemaVisitStepContextProvider) {
-		const updateObject = function (object:ObjectTypeDefinitionNode, logging = false) {
-			if (!object) {
+		const updateOperation = function (operation:ObjectTypeDefinitionNode, logging = false) {
+			if (!operation) {
 				return;
 			}
-			const objectName = object.name.value;
+			const operationName = operation.name.value;
+			const awsScalarTypes = ["AWSDate", "AWSTime", "AWSDateTime", "AWSTimestamp", "AWSEmail", "AWSJSON", "AWSPhone", "AWSURL", "AWSIPAddress"];
+			const scalarTypes = [...awsScalarTypes, "String", "ID", "Int", "Float", "Boolean"];
+
+			let fieldName = "";
+			let argumentName = "";
+			let update = false;
+			const getInputTypeNode = function (inputTypeNode:TypeNode):TypeNode {
+				const typeStack:TypeNode[] = [];
+				let typeNode = inputTypeNode
+				while (typeNode.kind !== "NamedType") {
+					typeStack.push(typeNode);
+					typeNode = typeNode.type;
+				}
+
+				const typeName = typeNode.name.value;
+				if (scalarTypes.includes(typeName)) {
+					return inputTypeNode;
+				}
+				const typeObject = acc.output.getType(typeName);
+
+				if (!typeObject) {
+					throw new InvalidDirectiveError(
+						"Type: '" + typeName + "' on " + operationName + "." + fieldName + "." + argumentName + " does not exist."
+					);
+				}
+				//Check if the argument is already an input
+				const typeKind = typeObject.kind;
+				if (typeKind === "SchemaDefinition" || typeKind === "DirectiveDefinition" || typeKind === "UnionTypeDefinition") {
+					throw new InvalidDirectiveError(
+						"Type: '" + typeName + "' within " + operationName + "." + fieldName + "." + argumentName + " is not a valid type."
+					);
+				}
+				if (typeKind === "EnumTypeDefinition" || typeKind === "ScalarTypeDefinition") {
+					return inputTypeNode;
+				}
+				const typeFields:InputValueDefinitionNode[] = [];
+				for (const field of typeObject.fields || []) {
+					const fieldType = getInputTypeNode(field.type);
+					const inputValueDefinition = {
+						kind: "InputValueDefinition",
+						name: field.name,
+						type: fieldType
+					} as InputValueDefinitionNode;
+					typeFields.push(inputValueDefinition);
+				}
+
+				let inputName = typeName;
+				if (typeKind !== "InputObjectTypeDefinition") {
+					//Check if an input with the same name already exists
+					inputName = typeName + "Input";
+					const existingInput = acc.output.getType(inputName);
+					//If an input with the same name does not exist, create a new input
+					if (existingInput === undefined) {
+						const newInput = {
+							kind: "InputObjectTypeDefinition",
+							name: {
+								kind: "Name",
+								value: inputName
+							},
+							fields: typeFields
+						} as InputObjectTypeDefinitionNode;
+						acc.output.addInput(newInput);
+						logging && console.log("Added input: ", inputName);
+					}
+					else if (existingInput.kind !== "InputObjectTypeDefinition") {
+						//If an input with the same name exists but is not an input, throw an error
+						throw new InvalidDirectiveError(
+							"Type: '" + inputName + "' is not an input type."
+						);
+					}
+					
+				}
+
+				let newType = {
+					kind: "NamedType",
+					name: {
+						kind: "Name",
+						value: inputName
+					}
+				} as TypeNode;
+
+				while (typeStack.length > 0	) {
+					const type = typeStack.pop();
+					newType = {
+						...type,
+						type: newType
+
+					} as TypeNode;
+				}
+				update = true;
+				return newType;
+			};
 
 			//Iterate over all the fields in the object and convert all arguments to inputs that are not already inputs
-			const fields = object.fields || [];
+			const fields = operation.fields || [];
 			const updatedFields = [];
-			let fieldUpdate = false;
 			for (const field of fields) {
-				const fieldName = field.name.value;
+				fieldName = field.name.value;
 				//Iterate over all the arguments in the field and convert them to inputs if they are not already inputs
 				const fieldArguments = field.arguments || [];
 				const updatedFieldArguments:InputValueDefinitionNode[] = [];
-				let argumentUpdate = false;
 				for (const fieldArgument of fieldArguments) {
-					const awsScalarTypes = ["AWSDate", "AWSTime", "AWSDateTime", "AWSTimestamp", "AWSEmail", "AWSJSON", "AWSPhone", "AWSURL", "AWSIPAddress"];
-					const scalarTypes = [...awsScalarTypes, "String", "ID", "Int", "Float", "Boolean"];
-					
 					//Get the argument object to check
-					const argumentName = fieldArgument.name.value;
-					let argumentType = fieldArgument.type;
-					const typeStack:TypeNode[] = [];
-					while (argumentType.kind !== "NamedType") {
-						argumentType = argumentType.type;
-						typeStack.push(argumentType);
-					}
-					const argumentTypeName = argumentType.name.value;
-					if (scalarTypes.includes(argumentTypeName)) {
-						updatedFieldArguments.push(fieldArgument);
-						continue;
-					}
-					const argumentObject = acc.output.getType(argumentTypeName);
-					if (!argumentObject) {
-						throw new InvalidDirectiveError(
-							"Type: '" + argumentTypeName + "' on " + objectName + "." + fieldName + "." + argumentName + " does not exist."
-						);
-					}
-					//Check if the argument is already an input
-					const argumentKind = argumentObject.kind;
-					if (argumentKind !== "InputObjectTypeDefinition" && argumentKind !== "EnumTypeDefinition" && argumentKind !== "ScalarTypeDefinition") {
-						//If not an input, check it can be converted to an input
-						if (argumentKind !== "InterfaceTypeDefinition" && argumentKind !== "ObjectTypeDefinition") {
-							throw new InvalidDirectiveError(
-								"Type: '" + argumentTypeName + "' on " + objectName + "." + fieldName + "." + argumentName + " is not a valid type."
-							);
-						}
-						//Check if an input with the same name already exists
-						const newInputName = argumentTypeName + "Input";
-						const existingInput = acc.output.getType(newInputName);
-						//If an input with the same name does not exist, create a new input
-						if (existingInput === undefined) {
-							const newInput = {
-								...argumentObject,
-								kind: "InputObjectTypeDefinition",
-								name: {
-									...argumentObject.name,
-									value: newInputName
-								}
-							} as InputObjectTypeDefinitionNode;
-							acc.output.addInput(newInput);
-							logging && console.log("Added input: ", newInputName);
-						}
-						else if (existingInput.kind !== "InputObjectTypeDefinition") {
-							//If an input with the same name exists but is not an input, throw an error
-							throw new InvalidDirectiveError(
-								"Type: '" + newInputName + "' is not an input type."
-							);
-						}
-
-						let newType = {
-							kind: "NamedType",
-							name: {
-								kind: "Name",
-								value: newInputName
-							}
-						} as TypeNode;
-
-						while (typeStack.length > 0	) {
-							const type = typeStack.pop();
-							newType = {
-								...type,
-								type: newType
-
-							} as TypeNode;
-						}
-						
-						// Create a new argument with the input type
-						let newInputValue = {
-							...fieldArgument,
-							kind: "InputValueDefinition",
-							type: newType
-						} as InputValueDefinitionNode;
-						
-						
-						// //Add the new argument to the updated field arguments
-						updatedFieldArguments.push(newInputValue);
-						argumentUpdate = true;
-					}
-					else {
-						//If the argument is already an input, add it to the updated field arguments
-						updatedFieldArguments.push(fieldArgument);
-					}
+					argumentName = fieldArgument.name.value;
+					const argumentType = getInputTypeNode(fieldArgument.type);
+					const newInputValue = {
+						kind: "InputValueDefinition",
+						name: fieldArgument.name,
+						type: argumentType,
+					} as InputValueDefinitionNode;
+					updatedFieldArguments.push(newInputValue);
 				}
-				//If there was an update, update the field with the updated arguments
-				if (argumentUpdate) {
-					const updatedField = {
-						...field,
-						arguments: updatedFieldArguments
-					} as FieldDefinitionNode;
-					updatedFields.push(updatedField);
-				}
-				else {
-					updatedFields.push(field);
-				}
+
+				const updatedField = {
+					kind: "FieldDefinition",
+					name: field.name,
+					type: field.type,
+					arguments: updatedFieldArguments
+				} as FieldDefinitionNode;
+				updatedFields.push(updatedField);
 			}
 			//If there was an update, update the object with the updated fields
-			if (fieldUpdate) {
+			if (update) {
 				const updatedObject = {
-					...object,
+					...operation,
 					fields: updatedFields
 				} as ObjectTypeDefinitionNode;
 				acc.output.updateObject(updatedObject);
@@ -167,20 +176,26 @@ export class InheritTransformer extends TransformerPluginBase {
 
 		const query = acc.output.getQuery();
 		if (query) {
-			updateObject(query);
+			updateOperation(query);
 		}
 		const mutation = acc.output.getMutation();
 		if (mutation) {
-			updateObject(mutation);
+			updateOperation(mutation);
 		}
 		const subscription = acc.output.getSubscription();
 		if (subscription) {
-			updateObject(subscription);
+			updateOperation(subscription);
 		}
+
+		// console.log(JSON.stringify(acc.output));
 	}
 }
 
-const transformDefinition = function (definition: ObjectTypeDefinitionNode|InputObjectTypeDefinitionNode, directive: DirectiveNode, acc: TransformerSchemaVisitStepContextProvider, logging: boolean = false) {
+const transformDefinition = function (
+	definition: ObjectTypeDefinitionNode|InputObjectTypeDefinitionNode, 
+	directive: DirectiveNode, acc: TransformerSchemaVisitStepContextProvider, 
+	logging: boolean = false
+) {
 	// Extract the names of the types to inherit from
 	const objectName = definition.name.value;
 	const definitionKind = definition.kind;
