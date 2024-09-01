@@ -79,7 +79,7 @@ export class InheritTransformer extends TransformerPluginBase {
 					}
 					//Check if the argument is already an input
 					const argumentKind = argumentObject.kind;
-					if (argumentKind !== "InputObjectTypeDefinition") {
+					if (argumentKind !== "InputObjectTypeDefinition" && argumentKind !== "EnumTypeDefinition" && argumentKind !== "ScalarTypeDefinition") {
 						//If not an input, check it can be converted to an input
 						if (argumentKind !== "InterfaceTypeDefinition" && argumentKind !== "ObjectTypeDefinition") {
 							throw new InvalidDirectiveError(
