@@ -2,6 +2,8 @@ This is a custom GraphQL transformer for using with AWS AppSync and Amplify.
 
 It allows you to add inheritance to types such that they can inherit all attributes from a parent type without the need for repetition of attributes
 
+It also automatically converts any attributes for Query, Mutation and Subscription operation that are types instead of inputs
+
 # graphql-inherit-transformer
 
 [![Pull requests are welcome!](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contribute-)
@@ -53,6 +55,38 @@ type UserModel {
 	createdAt: AWSTimestamp!
 }
 ```
+
+### Automatic input conversion
+
+```graphql
+type Model {
+	id: ID!
+	createdAt: AWSTimestamp!
+}
+
+type Mutation {
+	createModel(model: Model) Model
+}
+```
+
+After transformation results in:
+
+```graphql
+type Model {
+	id: ID!
+	createdAt: AWSTimestamp!
+}
+
+type ModelInput {
+	id: ID!
+	createdAt: AWSTimestamp!
+}
+
+type Mutation {
+	createModel(model: ModelInput) Model
+}
+```
+
 
 ## License
 

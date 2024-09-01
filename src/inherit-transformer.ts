@@ -17,21 +17,168 @@ import {
 	FieldDefinitionNode,
 	NamedTypeNode,
 	TypeDefinitionNode,
+	InputValueDefinitionNode,
+	TypeNode,
 } from "graphql";
 
 export class InheritTransformer extends TransformerPluginBase {
 	constructor() {
-		super("InheritTransformer", "directive @inherit(from: [String!]!, removeNonNull: [String]) on OBJECT");
+		super(
+			"InheritTransformer", 
+			"directive @inherit(from: [String!]!, removeNonNull: [String]) on OBJECT|INPUT_OBJECT"
+		);
 	}
 
 	public object = function (definition: ObjectTypeDefinitionNode, directive: DirectiveNode, acc: TransformerSchemaVisitStepContextProvider) {
 		transformDefinition(definition, directive, acc, false);
 	};
+
+	public input = function (definition: InputObjectTypeDefinitionNode, directive: DirectiveNode, acc: TransformerSchemaVisitStepContextProvider) {
+		transformDefinition(definition, directive, acc, false);
+	};
+
+	public transformSchema = function (acc: TransformerSchemaVisitStepContextProvider) {
+		const updateObject = function (object:ObjectTypeDefinitionNode, logging = true) {
+			if (!object) {
+				return;
+			}
+			const objectName = object.name.value;
+
+			//Iterate over all the fields in the object and convert all arguments to inputs that are not already inputs
+			const fields = object.fields || [];
+			const updatedFields = [];
+			let fieldUpdate = false;
+			for (const field of fields) {
+				const fieldName = field.name.value;
+				//Iterate over all the arguments in the field and convert them to inputs if they are not already inputs
+				const fieldArguments = field.arguments || [];
+				const updatedFieldArguments:InputValueDefinitionNode[] = [];
+				let argumentUpdate = false;
+				for (const fieldArgument of fieldArguments) {
+					//Get the argument object to check
+					const argumentName = fieldArgument.name.value;
+					let argumentType = fieldArgument.type;
+					const typeStack:TypeNode[] = [];
+					while (argumentType.kind !== "NamedType") {
+						argumentType = argumentType.type;
+						typeStack.push(argumentType);
+					}
+					const argumentTypeName = argumentType.name.value;
+					const argumentObject = acc.output.getType(argumentTypeName);
+					if (!argumentObject) {
+						throw new InvalidDirectiveError(
+							"Type: '" + argumentTypeName + "' on " + objectName + "." + fieldName + "." + argumentName + " does not exist."
+						);
+					}
+					//Check if the argument is already an input
+					const argumentKind = argumentObject.kind;
+					if (argumentKind !== "InputObjectTypeDefinition") {
+						//If not an input, check it can be converted to an input
+						if (argumentKind !== "InterfaceTypeDefinition" && argumentKind !== "ObjectTypeDefinition") {
+							throw new InvalidDirectiveError(
+								"Type: '" + argumentTypeName + "' on " + objectName + "." + fieldName + "." + argumentName + " is not a valid type."
+							);
+						}
+						//Check if an input with the same name already exists
+						const newInputName = argumentTypeName + "Input";
+						const existingInput = acc.output.getType(newInputName);
+						//If an input with the same name does not exist, create a new input
+						if (existingInput === undefined) {
+							const newInput = {
+								...argumentObject,
+								kind: "InputObjectTypeDefinition",
+								name: {
+									...argumentObject.name,
+									value: newInputName
+								}
+							} as InputObjectTypeDefinitionNode;
+							acc.output.addInput(newInput);
+							logging && console.log("Added input: ", newInputName);
+						}
+						else if (existingInput.kind !== "InputObjectTypeDefinition") {
+							//If an input with the same name exists but is not an input, throw an error
+							throw new InvalidDirectiveError(
+								"Type: '" + newInputName + "' is not an input type."
+							);
+						}
+
+						let newType = {
+							kind: "NamedType",
+							name: {
+								kind: "Name",
+								value: newInputName
+							}
+						} as TypeNode;
+
+						while (typeStack.length > 0	) {
+							const type = typeStack.pop();
+							newType = {
+								...type,
+								type: newType
+
+							} as TypeNode;
+						}
+						
+						// Create a new argument with the input type
+						let newInputValue = {
+							...fieldArgument,
+							kind: "InputValueDefinition",
+							type: newType
+						} as InputValueDefinitionNode;
+						
+						
+						// //Add the new argument to the updated field arguments
+						updatedFieldArguments.push(newInputValue);
+						argumentUpdate = true;
+					}
+					else {
+						//If the argument is already an input, add it to the updated field arguments
+						updatedFieldArguments.push(fieldArgument);
+					}
+				}
+				//If there was an update, update the field with the updated arguments
+				if (argumentUpdate) {
+					const updatedField = {
+						...field,
+						arguments: updatedFieldArguments
+					} as FieldDefinitionNode;
+					updatedFields.push(updatedField);
+				}
+				else {
+					updatedFields.push(field);
+				}
+			}
+			//If there was an update, update the object with the updated fields
+			if (fieldUpdate) {
+				const updatedObject = {
+					...object,
+					fields: updatedFields
+				} as ObjectTypeDefinitionNode;
+				acc.output.updateObject(updatedObject);
+			}
+		}
+
+		const query = acc.output.getQuery();
+		if (query) {
+			updateObject(query);
+		}
+		const mutation = acc.output.getMutation();
+		if (mutation) {
+			updateObject(mutation);
+		}
+		const subscription = acc.output.getSubscription();
+		if (subscription) {
+			updateObject(subscription);
+		}
+
+		console.log(JSON.stringify(acc.output));
+	}
 }
 
-const transformDefinition = function (definition: ObjectTypeDefinitionNode, directive: DirectiveNode, acc: TransformerSchemaVisitStepContextProvider, logging: boolean = false) {
+const transformDefinition = function (definition: ObjectTypeDefinitionNode|InputObjectTypeDefinitionNode, directive: DirectiveNode, acc: TransformerSchemaVisitStepContextProvider, logging: boolean = false) {
 	// Extract the names of the types to inherit from
 	const objectName = definition.name.value;
+	const definitionKind = definition.kind;
 	logging && console.log("Name: ", objectName);
 	const directiveName = directive.name.value;
 	if (directiveName !== 'inherit') {
@@ -111,13 +258,22 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 
 	//Build a map of the fields in the current type including inherited fields
 	interface ITransformedDefinitionFields {
-		[key: string]: FieldDefinitionNode;
+		[key: string]: FieldDefinitionNode|InputValueDefinitionNode;
 	}
 	const transformedDefinitionFields:ITransformedDefinitionFields = {};
 	const fields = definition.fields || [];
 	//Start with the fields in the current type already
 	for (const field of fields) {
-		transformedDefinitionFields[field.name.value] = field;
+		let fieldKind = "FieldDefinition"
+		if (definitionKind === "InputObjectTypeDefinition") {
+			fieldKind = "InputValueDefinition";
+		}
+		const newField = {
+			...field,
+			kind: fieldKind
+		} as FieldDefinitionNode|InputValueDefinitionNode;
+
+		transformedDefinitionFields[field.name.value] = newField;
 	}
 
 	//Get the names of the types to inherit from
@@ -129,12 +285,18 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 
 	//Get the fields from the inherited types
 	const getTransformedDefinitionFields = function (definitionName:string, removeNonNullable:boolean = false) {
-		const givenDefinition = acc.output.getObject(definitionName);
+		const givenDefinition = acc.output.getType(definitionName);
 		if (!givenDefinition) {
 			throw new InvalidDirectiveError(
-				"Type " + definitionName + " specified in '@inherit' directive does not exist."
+				"Type '" + definitionName + "' specified in '@inherit' directive does not exist."
 			);
 		}
+		if (givenDefinition.kind !== "ObjectTypeDefinition" && givenDefinition.kind !== "InputObjectTypeDefinition") {
+			throw new InvalidDirectiveError(
+				"Type '" + definitionName + "' specified in '@inherit' directive is not a valid type."
+			);
+		}
+
 		const definitionFields = [...givenDefinition.fields || []];
 		for (let definitionField of definitionFields) {
 			if (removeNonNullable) {
@@ -146,7 +308,16 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 					}
 				}
 			}
-			transformedDefinitionFields[definitionField.name.value] = definitionField;
+
+			let fieldKind = "FieldDefinition"
+			if (definitionKind === "InputObjectTypeDefinition") {
+				fieldKind = "InputValueDefinition";
+			}
+			const newDefinitionField = {
+				...definitionField,
+				kind: fieldKind
+			} as FieldDefinitionNode|InputValueDefinitionNode;
+			transformedDefinitionFields[definitionField.name.value] = newDefinitionField;
 		}
 		const definitionDirectives = givenDefinition.directives || [];
 		for (const definitionDirective of definitionDirectives) {
@@ -343,5 +514,5 @@ const transformDefinition = function (definition: ObjectTypeDefinitionNode, dire
 	// 	});
 	// }
 
-	logging && console.log(JSON.stringify(acc.output));
+	//logging && console.log(JSON.stringify(acc.output));
 };
