@@ -19,7 +19,13 @@ import {
 	TypeDefinitionNode,
 	InputValueDefinitionNode,
 	TypeNode,
+	buildASTSchema,
+	print,
+	DocumentNode
 } from "graphql";
+
+const fs = require("fs");
+const path = require("path");
 
 export class InheritTransformer extends TransformerPluginBase {
 	constructor() {
@@ -49,7 +55,8 @@ export class InheritTransformer extends TransformerPluginBase {
 			let fieldName = "";
 			let argumentName = "";
 			let update = false;
-			const getInputTypeNode = function (inputTypeNode:TypeNode):TypeNode {
+			const getInputTypeNode = function (inputTypeNode:TypeNode, parentNameStack:string[] = [], parentTypeStack:string[] = []):TypeNode {
+				// console.log(parentStack);
 				const typeStack:TypeNode[] = [];
 				let typeNode = inputTypeNode
 				while (typeNode.kind !== "NamedType") {
@@ -57,7 +64,26 @@ export class InheritTransformer extends TransformerPluginBase {
 					typeNode = typeNode.type;
 				}
 
+				let name = "";
+				for (const parent of parentNameStack) {
+					if (name != "") {
+						name = name + ".";
+					}
+					name = name + parent;
+				}
 				const typeName = typeNode.name.value;
+				
+				parentTypeStack = [...parentTypeStack, typeName];
+				let type = "";
+				for (const parent of parentTypeStack) {
+					if (type != "") {
+						type = type + ".";
+					}
+					type = type + parent;
+				}
+				// console.log("Input: " + name + " : " + type);
+				// console.log(inputTypeNode);
+				
 				if (scalarTypes.includes(typeName)) {
 					return inputTypeNode;
 				}
@@ -78,9 +104,62 @@ export class InheritTransformer extends TransformerPluginBase {
 				if (typeKind === "EnumTypeDefinition" || typeKind === "ScalarTypeDefinition") {
 					return inputTypeNode;
 				}
+
+				const pretendGenerateType = function (typeNode:NamedTypeNode):TypeNode {
+					const typeName = typeNode.name.value;
+					if (scalarTypes.includes(typeName)) {
+						return typeNode;
+					}
+					const typeObject = acc.output.getType(typeName);
+					if (!typeObject) {
+						throw new InvalidDirectiveError(
+							"Type: '" + typeName + "' on " + operationName + "." + fieldName + "." + argumentName + " does not exist."
+						);
+					}
+					const typeKind = typeObject.kind;
+					let inputName = typeName;
+					if (typeKind !== "InputObjectTypeDefinition") {
+						inputName = typeName + "Input";
+						update = true;
+					}
+
+					return {
+						kind: "NamedType",
+						name: {
+							kind: "Name",
+							value: inputName
+						}
+					} as TypeNode;
+				};
+					
+
 				const typeFields:InputValueDefinitionNode[] = [];
 				for (const field of typeObject.fields || []) {
-					const fieldType = getInputTypeNode(field.type);
+					let fieldType = field.type;
+					let primitiveType = fieldType
+					while (primitiveType.kind !== "NamedType") {
+						primitiveType = primitiveType.type;
+					}
+					if(parentTypeStack.includes(primitiveType.name.value)) {
+						// console.log("Parent stack includes: ", primitiveType.name.value);
+						// console.log(parentStack);
+						fieldType = pretendGenerateType(primitiveType);
+						while (typeStack.length > 0	) {
+							const type = typeStack.pop();
+							fieldType = {
+								...type,
+								type: fieldType
+		
+							} as TypeNode;
+						}
+					}
+					else {
+						// parentStack.push(primitiveType.name.value);
+						const fieldName = field.name.value;
+						const newParentNameStack = [...parentNameStack, fieldName];
+						fieldType = getInputTypeNode(field.type, newParentNameStack, parentTypeStack);
+					}	
+
 					const inputValueDefinition = {
 						kind: "InputValueDefinition",
 						name: field.name,
@@ -113,8 +192,10 @@ export class InheritTransformer extends TransformerPluginBase {
 							"Type: '" + inputName + "' is not an input type."
 						);
 					}
-					
 				}
+
+				// console.log(inputTypeNode);
+				// console.log(typeStack);
 
 				let newType = {
 					kind: "NamedType",
@@ -133,8 +214,11 @@ export class InheritTransformer extends TransformerPluginBase {
 					} as TypeNode;
 				}
 				update = true;
+				// console.log("Output: " + name + " : " + type);
+				// console.log(newType);
 				return newType;
 			};
+			
 
 			//Iterate over all the fields in the object and convert all arguments to inputs that are not already inputs
 			const fields = operation.fields || [];
@@ -147,7 +231,7 @@ export class InheritTransformer extends TransformerPluginBase {
 				for (const fieldArgument of fieldArguments) {
 					//Get the argument object to check
 					argumentName = fieldArgument.name.value;
-					const argumentType = getInputTypeNode(fieldArgument.type);
+					const argumentType = getInputTypeNode(fieldArgument.type, [argumentName]);
 					const newInputValue = {
 						kind: "InputValueDefinition",
 						name: fieldArgument.name,
@@ -160,7 +244,8 @@ export class InheritTransformer extends TransformerPluginBase {
 					kind: "FieldDefinition",
 					name: field.name,
 					type: field.type,
-					arguments: updatedFieldArguments
+					arguments: updatedFieldArguments,
+					directives: field.directives
 				} as FieldDefinitionNode;
 				updatedFields.push(updatedField);
 			}
@@ -186,9 +271,29 @@ export class InheritTransformer extends TransformerPluginBase {
 		if (subscription) {
 			updateOperation(subscription);
 		}
-
-		// console.log(JSON.stringify(acc.output));
 	}
+
+	public after = function (acc: TransformerSchemaVisitStepContextProvider) {
+		const saveSchemaOutput = function (outputPath:string) {
+			const nodeMap = JSON.parse(JSON.stringify(acc.output)).nodeMap;
+			const definitions = [];
+			for (const definition of Object.values(nodeMap)) {
+				definitions.push(definition);
+			}
+			const documentNode = {
+				kind: "Document",
+				definitions: definitions
+			} as DocumentNode;
+			const schema = print(documentNode);
+
+			const directory = path.dirname(outputPath);
+			if (!fs.existsSync(directory)) {
+				fs.mkdirSync(directory, {recursive: true});
+			}
+			fs.writeFileSync(outputPath, schema, "utf8");
+		};
+		// saveSchemaOutput(path.join(__dirname, "/output/outputSchema.graphql"))
+    }
 }
 
 const transformDefinition = function (

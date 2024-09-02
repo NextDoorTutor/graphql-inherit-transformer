@@ -352,13 +352,62 @@ import InheritTransformer from "../index";
 // 	}).not.toThrow();
 // });
 
-test("Primitive type argument", () => {
+// test("Primitive type argument", () => {
+// 	const schema = `
+// 		input Test1 {
+// 			name: String!
+// 		}
+// 		input Test2 @inherit(from: "Test1") {
+// 			name2: String!
+// 		}
+
+// 		type AvailabilityWindow {
+// 			startTime: String!
+// 			endTime: String!
+// 		}
+// 		type WeekAvailability {
+// 			Monday: [AvailabilityWindow!]!
+// 			Tuesday: [AvailabilityWindow!]!
+// 			Wednesday: [AvailabilityWindow!]!
+// 			Thursday: [AvailabilityWindow!]!
+// 			Friday: [AvailabilityWindow!]!
+// 			Saturday: [AvailabilityWindow!]!
+// 			Sunday: [AvailabilityWindow!]!
+// 		}
+
+// 		type UserModel {
+// 			name: String!
+// 			availability: WeekAvailability
+// 		}
+
+// 		type Mutation {
+// 			createUser(name: UserModel!): UserModel
+// 		}
+// 	`;
+// 	const transformer = new GraphQLTransform({
+// 		transformers: [new ModelTransformer(), new InheritTransformer()],
+// 	});
+// 	expect(() => {
+// 		const test = transformer.transform(schema);
+// 		//console.log(test);
+// 	}).not.toThrow();
+// });
+
+test("Actual test", () => {
 	const schema = `
-		input Test1 {
-			name: String!
+		type Geocode {
+			latitude: Float!
+			longitude: Float!
 		}
-		input Test2 @inherit(from: "Test1") {
-			name2: String!
+		type Address {
+			address1stLine: String
+			postcode: String!
+			geocode: Geocode
+		}
+		type GeocodedAddress {
+			address1stLine: String!
+			postcode: String!
+			geocode: Geocode!
 		}
 
 		type AvailabilityWindow {
@@ -375,13 +424,38 @@ test("Primitive type argument", () => {
 			Sunday: [AvailabilityWindow!]!
 		}
 
-		type UserModel {
-			name: String!
-			availability: WeekAvailability
+		#General models
+		type Model {
+			id: ID!
+			modelTypeID: String!
+			createdAt: AWSDateTime!
+			updatedAt: AWSDateTime!
+			version: Int!
+		}
+		type AreaModel @inherit(from: "Model") {
+			areaCode: String!
 		}
 
+		#User table
+		type NameModel {
+			firstNames: String!
+			lastName: String!
+			staticKey: String
+		}
+
+		type Student @inherit(from: ["NameModel"]) {
+			yearGroup: String!
+			defaultAvailability: WeekAvailability
+		}
+		type StudentModel @inherit(from: ["AreaModel", "Student"])
+
 		type Mutation {
-			createUser(name: UserModel!): UserModel
+			parentAddStudent(attributes:Student):StudentModel!
+		}
+
+		type Subscription {
+			onUserUpdate(attributes:Student!):StudentModel
+				@aws_subscribe(mutations: ["parentAddStudent"])
 		}
 	`;
 	const transformer = new GraphQLTransform({
